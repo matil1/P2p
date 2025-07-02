@@ -1,0 +1,57 @@
+import time
+import requests
+from telegram import Bot
+from telegram.ext import CommandHandler, Updater
+
+TOKEN = "7506907476:AAEuS0PembLqspNwPofU7zztgDOnk5O0OOg"
+CHAT_ID = 784948769
+
+bot = Bot(token=TOKEN)
+
+def get_binance_p2p_price():
+    url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
+    payload = {
+        "asset": "USDT",
+        "fiat": "UAH",
+        "tradeType": "SELL",
+        "page": 1,
+        "rows": 5,
+        "publisherType": None
+    }
+    try:
+        resp = requests.post(url, json=payload)
+        data = resp.json()
+        advs = data.get("data", [])
+        prices = [float(item["adv"]["price"]) for item in advs]
+        if prices:
+            return min(prices)
+    except Exception as e:
+        print("Ошибка при запросе курса:", e)
+    return None
+
+def start(update, context):
+    update.message.reply_text("Привет! Я отслеживаю курс P2P USDT/UAH на Binance.")
+
+def check_price(context):
+    price = get_binance_p2p_price()
+    if price:
+        print(f"Текущий курс: {price} UAH")
+        if price < 40:
+            context.bot.send_message(chat_id=CHAT_ID, text=f"Выгодный курс USDT/UAH: {price} UAH")
+    else:
+        print("Не удалось получить курс.")
+
+def main():
+    updater = Updater(token=TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+
+    job_queue = updater.job_queue
+    job_queue.run_repeating(check_price, interval=30, first=10)
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
